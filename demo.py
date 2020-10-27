@@ -55,15 +55,23 @@ def demo(args):
         for imfile1, imfile2 in zip(images[:-1], images[1:]):
             image1 = load_image(imfile1)
             image2 = load_image(imfile2)
+            print(image1.shape, image2.shape)
 
-            padder = InputPadder(image1.shape)
+            padder = InputPadder(image1.shape, mode='kitti')
             image1, image2 = padder.pad(image1, image2)
 
             flow_low, flow_up = model(image1, image2, iters=20, test_mode=True)
-            viz(image1, flow_up)
+
+            print(image1.shape, image2.shape, flow_up.shape, flow_low.shape)
+
+            # viz(image1, flow_up)
 
 
 if __name__ == '__main__':
+
+    import os
+    print(os.getcwd())
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint")
     parser.add_argument('--path', help="dataset for evaluation")

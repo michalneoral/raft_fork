@@ -1,21 +1,8 @@
-# MIT License
-#
-# Copyright (c) 2018 Tom Runia
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to conditions.
-#
-# Author: Tom Runia
-# Date Created: 2018-08-03
+import sys, os
+from PIL import Image
+import imageio
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
+import png
 import numpy as np
 
 
@@ -193,7 +180,7 @@ def make_color_wheel():
 
 
 
-def compute_color(u, v, clip_flow=None):
+def compute_color(u, v):
     """
     compute optical flow color map
     :param u: optical flow horizontal map
@@ -210,9 +197,6 @@ def compute_color(u, v, clip_flow=None):
     ncols = np.size(colorwheel, 0)
 
     rad = np.sqrt(u**2+v**2)
-    if clip_flow is not None:
-        rad = np.clip(rad, 0, clip_flow)
-        # print("normalise")
 
     a = np.arctan2(-v, -u) / np.pi
 
@@ -240,151 +224,81 @@ def compute_color(u, v, clip_flow=None):
     return img
 
 # from https://github.com/gengshan-y/VCN
-def flow_to_image(flow, clip_flow=None):
+def flow_to_image(flow):
     """
     Convert flow into middlebury color code image
     :param flow: optical flow map
     :return: optical flow image in middlebury color
     """
+    u = flow[:, :, 0]
+    v = flow[:, :, 1]
 
-    img = flow2color_matlab_numpy(flow, max_flow=clip_flow)
+    maxu = -999.
+    maxv = -999.
+    minu = 999.
+    minv = 999.
 
+    idxUnknow = (abs(u) > UNKNOWN_FLOW_THRESH) | (abs(v) > UNKNOWN_FLOW_THRESH)
+    u[idxUnknow] = 0
+    v[idxUnknow] = 0
 
-    # u = flow[:, :, 0]
-    # v = flow[:, :, 1]
-    #
-    #
-    # maxu = -999.
-    # maxv = -999.
-    # minu = 999.
-    # minv = 999.
-    #
-    # idxUnknow = (abs(u) > UNKNOWN_FLOW_THRESH) | (abs(v) > UNKNOWN_FLOW_THRESH)
-    # u[idxUnknow] = 0
-    # v[idxUnknow] = 0
-    #
-    # maxu = max(maxu, np.max(u))
-    # minu = min(minu, np.min(u))
-    #
-    # maxv = max(maxv, np.max(v))
-    # minv = min(minv, np.min(v))
-    #
-    # rad = np.sqrt(u ** 2 + v ** 2)
-    # maxrad = max(-1, np.max(rad))
-    #
-    # u = u/(maxrad + np.finfo(float).eps)
-    # v = v/(maxrad + np.finfo(float).eps)
-    #
-    # img = compute_color(u, v, clip_flow=clip_flow)
-    #
-    # idx = np.repeat(idxUnknow[:, :, np.newaxis], 3, axis=2)
-    # img[idx] = 0
+    maxu = max(maxu, np.max(u))
+    minu = min(minu, np.min(u))
+
+    maxv = max(maxv, np.max(v))
+    minv = min(minv, np.min(v))
+
+    rad = np.sqrt(u ** 2 + v ** 2)
+    maxrad = max(-1, np.max(rad))
+
+    u = u/(maxrad + np.finfo(float).eps)
+    v = v/(maxrad + np.finfo(float).eps)
+
+    img = compute_color(u, v)
+
+    idx = np.repeat(idxUnknow[:, :, np.newaxis], 3, axis=2)
+    img[idx] = 0
 
     return np.uint8(img)
 
 
-def flow2color_matlab_numpy(flow, max_flow=None):
-    unknown_flow_thresh = 1e9
-    eps = 2e-8
-    u = flow[:, :, 0]
-    v = flow[:, :, 1]
-    maxrad = -1
-    # fix unknown flow
-    idxUnknown = (np.abs(u) > unknown_flow_thresh) | (np.abs(v) > unknown_flow_thresh)
-    u[idxUnknown] = 0
-    v[idxUnknown] = 0
-    rad = np.sqrt(u**2 + v**2)
-    maxrad = max(maxrad, rad.max())
-    if max_flow is not None:
-        if max_flow > 0:
-            maxrad = max_flow
-    u = u / (maxrad + eps)
-    v = v / (maxrad + eps)
-    # compute color
-    img = _computeColor(u, v)
-    # unknown flow
-    idx = np.stack([idxUnknown, idxUnknown, idxUnknown], 2)
-    img[idx] = 0
-    img = img.astype(np.float32)
-    return img
+def _read_png_python(filepath, dtype=None, channels=1):
+    dtype = dtype if dtype is not None else np.uint8
+    reader = png.Reader(filepath)
+    pngdata = reader.read()
+    px_array = np.array(list(map(dtype, pngdata[2])))
+    if channels != 1:
+        px_array = px_array.reshape(-1, np.int32(px_array.shape[1] // channels), channels)
+        if channels == 4:
+            px_array = px_array[:, :, 0:3]
+    else:
+        px_array = np.expand_dims(px_array, axis=2)
+    return px_array
+
+def read_flow(file_path):
+    flow = _read_png_python(file_path, channels=3, dtype=np.uint16)
+    flow = flow.astype(np.float32)
+    u, v, valid = flow[:,:,0], flow[:,:,1], flow[:,:,2]
+    u = (u - 2 ** 15) / 64.
+    v = (v - 2 ** 15) / 64.
+    flow = np.stack([u, v, valid], axis=2)
+    return flow
+
+def create_dir_if_no_exists(path):
+    splitted = path.split('/')
+    dir_path = os.path.join('/', *splitted[:-1])
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
 
 
-def _computeColor(u, v):
-    nanIdx = np.isnan(u) | np.isnan(v)
-    u[nanIdx] = 0
-    v[nanIdx] = 0
-    colorwheel = _make_color_wheel()
-    ncols = colorwheel.shape[0]
-    rad = np.sqrt(u**2 + v**2)
-    rad = np.minimum(rad, 1.0)
-    a = np.arctan2(-v, -u) / np.pi
-    a[np.logical_and(u > 0, v == 0)] = -1
-    # -1~1 mapped to 0~ncols-1
-    fk = (a + 1) / 2 * (ncols - 1) + 1
-    # 1, 2, ..., ncols
-    k0 = np.floor(fk).astype(np.uint8)
-    k1 = k0 + 1
-    k1[k1 == ncols + 1] = 0
-    f = fk - k0
-    img = np.zeros((u.shape[0], u.shape[1], 3))
-    for i in range(colorwheel.shape[1]):
-        tmp = colorwheel[:, i]
-        col0 = tmp[k0-1] / 255
-        col1 = tmp[k1-1] / 255
-        col = (1 - f) * col0 + f * col1
+def save_image(im, path):
+    create_dir_if_no_exists(path)
+    imageio.imwrite(path, im)
 
-        idx = rad <= 1
-        col[idx] = 1 - rad[idx] * (1 - col[idx])		# increase saturation with radius
 
-        col[np.logical_not(idx)] = col[np.logical_not(idx)] * 0.75		# out of range
+if __name__ == '__main__':
+    flow = read_flow("/home/neoramic/Desktop/flow.png")
 
-        img[:, :, i] = (np.floor(255 * col * (1 - nanIdx)))
-    return img.astype(np.uint8)
+    flow_image = flow_to_image(flow)
 
-def _make_color_wheel():
-    # color encoding scheme
-    # adapted from the color circle	idea described at
-    # http: // members.shaw.ca / quadibloc / other / colint.htm
-    RY = 70
-    YG = 28
-    GC = 19
-    CB = 51
-    BM = 60
-    MR = 28
-
-    # RY = 15
-    # YG = 6
-    # GC = 4
-    # CB = 11
-    # BM = 13
-    # MR = 6
-
-    ncols = RY + YG + GC + CB + BM + MR
-    colorwheel = np.zeros((ncols, 3))
-
-    col = 0
-    # RY
-    colorwheel[0:RY, 0] = 255
-    colorwheel[0:RY, 1] = np.floor(255 * np.arange(RY).astype(np.float32) / RY).T
-    col = col + RY
-    # YG
-    colorwheel[col + np.arange(YG), 0] = 255 - np.floor(255 * np.arange(YG).astype(np.float32) / YG).T
-    colorwheel[col + np.arange(YG), 1] = 255
-    col = col + YG
-    # GC
-    colorwheel[col + np.arange(GC), 1] = 255
-    colorwheel[col + np.arange(GC), 2] = np.floor(255 * np.arange(GC).astype(np.float32) / GC).T
-    col = col + GC
-    # CB
-    colorwheel[col + np.arange(CB), 1] = 255 - np.floor(255 * np.arange(CB).astype(np.float32) / CB).T
-    colorwheel[col + np.arange(CB), 2] = 255
-    col = col + CB
-    # BM
-    colorwheel[col + np.arange(BM), 2] = 255
-    colorwheel[col + np.arange(BM), 0] = np.floor(255 * np.arange(BM ).astype(np.float32) / BM).T
-    col = col + BM
-    # MR
-    colorwheel[col + np.arange(MR), 2] = 255 - np.floor(255 * np.arange(MR).astype(np.float32) / MR).T
-    colorwheel[col + np.arange(MR), 0] = 255
-
-    return colorwheel
+    save_image(flow_image, "/home/neoramic/Desktop/flow_image.png")
