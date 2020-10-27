@@ -44,8 +44,12 @@ def gen(args):
     else:
         raise NotImplementedError()
 
-    data_root = '/datagrid/tlab/data/MoSegUnexpected/images_halfres'
-    save_root = '/datagrid/tlab/data/MoSegUnexpected/flow_halfres/raft/model-{:s}'.format(short_model_name)
+    if args.fullres:
+        data_root = '/datagrid/tlab/data/MoSegUnexpected/images'
+        save_root = '/datagrid/tlab/data/MoSegUnexpected/flow_fullres/raft/model-{:s}'.format(short_model_name)
+    else:
+        data_root = '/datagrid/tlab/data/MoSegUnexpected/images_halfres'
+        save_root = '/datagrid/tlab/data/MoSegUnexpected/flow_halfres/raft/model-{:s}'.format(short_model_name)
 
     ITERS = 24
 
@@ -126,6 +130,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint")
     parser.add_argument('--small', action='store_true', help='use small model')
+    parser.add_argument('--fullres', action='store_true', help='use small model')
     parser.add_argument('--iters', type=int, default=12)
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
