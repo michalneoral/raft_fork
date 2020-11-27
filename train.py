@@ -15,9 +15,9 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from torch.utils.data import DataLoader
-from raft import RAFT
+from core.raft import RAFT
 import evaluate
-import datasets
+import core.datasets as datasets
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -214,8 +214,16 @@ def train(args):
     return PATH
 
 
+def convert_arg_line_to_args(arg_line):
+    for arg in arg_line.split():
+        if not arg.strip():
+            continue
+        yield arg
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='RAFT PyTorch implementation.', fromfile_prefix_chars='@')
+    parser.convert_arg_line_to_args = convert_arg_line_to_args
+
     parser.add_argument('--name', default='raft', help="name your experiment")
     parser.add_argument('--stage', help="determines which dataset to use for training") 
     parser.add_argument('--restore_ckpt', help="restore checkpoint")
@@ -236,7 +244,15 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--gamma', type=float, default=0.8, help='exponential weighting')
     parser.add_argument('--add_noise', action='store_true')
-    args = parser.parse_args()
+    parser.add_argument('--dashcam_augmenentation', action='store_true')
+    parser.add_argument('--blend_source', default='/datagrid/public_datasets/COCO/train2017', help="path to blending images")
+
+
+    if sys.argv.__len__() == 2:
+        arg_filename_with_prefix = '@' + sys.argv[1]
+        args = parser.parse_args([arg_filename_with_prefix])
+    else:
+        args = parser.parse_args()
 
     torch.manual_seed(1234)
     np.random.seed(1234)

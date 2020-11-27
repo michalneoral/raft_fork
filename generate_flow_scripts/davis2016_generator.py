@@ -45,11 +45,11 @@ def gen(args):
         raise NotImplementedError()
 
     if args.fullres:
-        data_root = '/datagrid/tlab/data/MoSegUnexpected/images'
-        save_root = '/datagrid/tlab/data/MoSegUnexpected/flow_fullres/raft/model-{:s}'.format(short_model_name)
+        data_root = '/datagrid/public_datasets/DAVIS/DAVIS16/JPEGImages/1080p'
+        save_root = '/datagrid/tlab/data/MoSegUnexpected/flow_davis2016_1080p/raft/model-{:s}'.format(short_model_name)
     else:
-        data_root = '/datagrid/tlab/data/MoSegUnexpected/images_halfres'
-        save_root = '/datagrid/tlab/data/MoSegUnexpected/flow_halfres/raft/model-{:s}'.format(short_model_name)
+        data_root = '/datagrid/public_datasets/DAVIS/DAVIS16/JPEGImages/480p'
+        save_root = '/datagrid/tlab/data/MoSegUnexpected/flow_davis2016_480p/raft/model-{:s}'.format(short_model_name)
 
     print('data_root: ' + data_root)
     print('save_root: ' + save_root)

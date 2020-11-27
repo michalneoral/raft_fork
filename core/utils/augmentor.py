@@ -2,18 +2,151 @@ import numpy as np
 import random
 import math
 from PIL import Image
+from core.utils.frame_utils import read_gen
+import os
 
 import cv2
 cv2.setNumThreads(0)
 cv2.ocl.setUseOpenCL(False)
+import imgaug.augmenters as iaa
+import blend_modes
+from perlin_numpy import generate_perlin_noise_2d
+import string
+import random
+import copy
 
 import torch
 from torchvision.transforms import ColorJitter
 import torch.nn.functional as F
 
 
-class FlowAugmentor:
-    def __init__(self, crop_size, min_scale=-0.2, max_scale=0.5, do_flip=True):
+class BlendAugmenter:
+    def __init__(self, source_dir=None, do_blend_transform=True, blend_prop=0.5, **kwargs):
+        if source_dir is None:
+            source_dir = "/datagrid/public_datasets/COCO/train2017"
+        if do_blend_transform:
+            self.image_list = self.list_dir_recursive(source_dir)
+        self.do_blend_transform = do_blend_transform
+        self.blend_prop = blend_prop
+        self.blend_clip_min = kwargs.get('blend_clip_min', 0.5)
+        self.blend_clip_max = kwargs.get('blend_clip_max', 0.8)
+        self.octaves = kwargs.get('octaves', 8)
+
+    def __call__(self, img1, img2, *args, **kwargs):
+        if self.do_blend_transform and np.random.rand() < self.blend_prop:
+            img1 = self.rgb2rgba(img1)
+            img2 = self.rgb2rgba(img2)
+            blend_img = self.generate_blend_image((img1.shape[1], img1.shape[0]))
+            blend_img = self.add_perlin_noise_alpha(blend_img, self.blend_clip_min, self.blend_clip_max, self.octaves)
+            r = random.uniform(0.0, 0.6)
+            img1 = blend_modes.lighten_only(img1, blend_img, r)[:,:,:3]
+            img2 = blend_modes.lighten_only(img2, blend_img, r)[:,:,:3]
+            img1 = np.round(img1).astype(np.uint8)
+            img2 = np.round(img2).astype(np.uint8)
+        return img1, img2
+
+    def add_perlin_noise_alpha(self, img, blend_clip_min, blend_clip_max, octaves):
+        H, W, _ = img.shape
+        perlin_octaves = octaves
+
+        W_b = ((W // perlin_octaves ** 2) + 1) * perlin_octaves ** 2
+        H_b = ((H // perlin_octaves ** 2) + 1) * perlin_octaves ** 2
+
+        noise = generate_perlin_noise_2d((H_b, W_b), (perlin_octaves, perlin_octaves))
+        noise = noise[:H, :W]
+
+        noise_th = noise - np.min(noise)
+
+        noise_th[noise_th < blend_clip_min] = blend_clip_min
+        noise_th[noise_th > blend_clip_max] = blend_clip_max
+
+        noise_th = (noise_th - blend_clip_min)
+        noise_th = noise_th / np.max(noise_th)
+
+        img[:, :, 3] = img[:, :, 3] * noise_th
+        return img
+
+    def generate_blend_image(self, shape):
+        path = np.random.choice(self.image_list)
+        blend_img = np.asarray(read_gen(path)).astype(np.float32)
+        resized = cv2.resize(blend_img, shape, interpolation=cv2.INTER_AREA)
+        return self.rgb2rgba(resized)
+
+    def rgb2rgba(self, img):
+        img = img.astype(np.float32)
+        return np.concatenate([img, 255 * np.ones([img.shape[0], img.shape[1], 1], dtype=np.float32)], axis=2)
+
+    def list_dir_recursive(self, path):
+        images_list = [os.path.join(path, x) for x in os.listdir(path) if os.path.isfile(os.path.join(path, x))]
+        subdir_list = [os.path.join(path, x) for x in os.listdir(path) if os.path.isdir(os.path.join(path, x))]
+        for s in subdir_list:
+            images_list += self.list_dir_recursive(s)
+        return images_list
+
+
+class TextAugmenter():
+    def __init__(self, do_add_text, max_add_text, add_text_prop, **kwargs):
+        self.do_add_text = do_add_text
+        self.max_add_text = max_add_text
+        self.add_text_prop = add_text_prop
+        self.set_text_flow_invalid = kwargs.get('set_text_flow_invalid', True)
+
+        self.max_lenght_text = kwargs.get('max_lenght_text', 20)
+        self.min_lenght_text = kwargs.get('min_lenght_text', 5)
+
+        self.font_thickness_max = kwargs.get('font_thickness_max', 5)
+        self.font_size_max = kwargs.get('font_size_max', 2.5)
+
+        self.wb_text_prop = kwargs.get('wb_text_prop', 0.5)
+        self.alpha_text_prop = kwargs.get('alpha_text_prop', 0.5)
+
+    def __call__(self, img1, img2, valid, *args, **kwargs):
+        if self.do_add_text and np.random.rand() < self.add_text_prop:
+            layers = np.random.randint(1, self.max_add_text + 1)
+            for i in range(layers):
+                img1, img2, valid = self.add_text(img1, img2, valid)
+            img1 = img1.astype(np.uint8)
+            img2 = img2.astype(np.uint8)
+            valid = valid.astype(np.int32)
+        return img1, img2, valid
+
+    def random_string(self, length):
+        chars = string.digits + string.ascii_letters + '    '
+        result_str = ''.join(random.choice(chars) for i in range(length))
+        return result_str
+
+    def add_text(self, img1, img2, valid):
+        font = np.random.randint(0, 8)
+
+        if np.random.rand() > self.wb_text_prop:
+            color = (np.random.randint(0, 256), np.random.randint(0, 256), np.random.randint(0, 256))
+        else:
+            color = np.random.randint(0, 256)
+            color = (color, color, color)
+
+        text = self.random_string(np.random.randint(self.min_lenght_text, self.max_lenght_text + 1))
+        x_pos = np.random.randint(0, img1.shape[1])
+        y_pos = np.random.randint(0, img1.shape[0])
+        font_size = np.random.rand() * self.font_size_max
+        font_thickness = np.random.randint(1, self.font_thickness_max + 1)
+
+        img1_text = cv2.putText(copy.deepcopy(img1), text, (x_pos, y_pos), font, font_size, color, thickness=font_thickness)
+        img2_text = cv2.putText(copy.deepcopy(img2), text, (x_pos, y_pos), font, font_size, color, thickness=font_thickness)
+
+        valid_mask = np.ones_like(img1)
+        valid_mask = cv2.putText(valid_mask, text, (x_pos, y_pos), font, font_size, (0, 0, 0), thickness=font_thickness)
+        if self.set_text_flow_invalid:
+            valid = (valid * (valid_mask[:, :, 0] > 0))
+
+        if np.random.rand() < self.alpha_text_prop:
+            alpha = np.random.rand()
+            img1_text = alpha * img1_text + (1 - alpha) * img1
+            img2_text = alpha * img2_text + (1 - alpha) * img2
+        return img1_text, img2_text, valid
+
+
+class FlowAugmenter:
+    def __init__(self, crop_size, min_scale=-0.2, max_scale=0.5, do_flip=True, **kwargs):
         
         # spatial augmentation params
         self.crop_size = crop_size
@@ -22,6 +155,22 @@ class FlowAugmentor:
         self.spatial_aug_prob = 0.8
         self.stretch_prob = 0.8
         self.max_stretch = 0.2
+
+        # jpeg transform
+        self.do_jpeg_transform = kwargs.get('do_jpeg_transform', False)
+        self.jpeg_prop = kwargs.get('jpeg_prop', 0.8)
+
+        # blend transform
+        self.blend_source = kwargs.get('blend_source', None)
+        self.do_blend_transform = kwargs.get('do_blend_transform', self.blend_source is not None)
+        self.blend_prop = 0.5
+        self.blend_aug = BlendAugmenter(source_dir=self.blend_source, blend_prop=self.blend_prop, do_blend_transform=self.do_blend_transform)
+
+        # additional text transform
+        self.do_add_text_transform = kwargs.get('do_add_text_transform', False)
+        self.add_text_prop = kwargs.get('add_text_prop', 0.5)
+        self.max_add_text = kwargs.get('max_add_text', 3)
+        self.add_text_aug = TextAugmenter(do_add_text=self.do_add_text_transform, max_add_text=self.max_add_text, add_text_prop=self.add_text_prop)
 
         # flip augmentation params
         self.do_flip = do_flip
@@ -48,6 +197,16 @@ class FlowAugmentor:
             img1, img2 = np.split(image_stack, 2, axis=0)
 
         return img1, img2
+
+
+    def jpeg_transform(self, img1, img2):
+        """ JPEG augmentation """
+
+        if self.do_jpeg_transform and np.random.rand() < self.jpeg_prop:
+            aug = iaa.imgcorruptlike.JpegCompression(severity=np.random.randint(1,6))
+            img1, img2 = aug(images=[img1, img2])
+        return img1, img2
+
 
     def eraser_transform(self, img1, img2, bounds=[50, 100]):
         """ Occlusion augmentation """
@@ -108,10 +267,13 @@ class FlowAugmentor:
 
         return img1, img2, flow
 
-    def __call__(self, img1, img2, flow):
+    def __call__(self, img1, img2, flow, valid):
         img1, img2 = self.color_transform(img1, img2)
         img1, img2 = self.eraser_transform(img1, img2)
-        img1, img2, flow = self.spatial_transform(img1, img2, flow)
+        img1, img2, flow = self.spatial_transform(img1, img2, flow, valid)
+        img1, img2 = self.blend_aug(img1, img2)
+        img1, img2, valid = self.add_text_aug(img1, img2, valid)
+        img1, img2 = self.jpeg_transform(img1, img2)
 
         img1 = np.ascontiguousarray(img1)
         img2 = np.ascontiguousarray(img2)
@@ -119,8 +281,8 @@ class FlowAugmentor:
 
         return img1, img2, flow
 
-class SparseFlowAugmentor:
-    def __init__(self, crop_size, min_scale=-0.2, max_scale=0.5, do_flip=False):
+class SparseFlowAugmenter:
+    def __init__(self, crop_size, min_scale=-0.2, max_scale=0.5, do_flip=False, **kwargs):
         # spatial augmentation params
         self.crop_size = crop_size
         self.min_scale = min_scale
@@ -128,6 +290,22 @@ class SparseFlowAugmentor:
         self.spatial_aug_prob = 0.8
         self.stretch_prob = 0.8
         self.max_stretch = 0.2
+
+        # jpeg transform
+        self.do_jpeg_transform = kwargs.get('do_jpeg_transform', False)
+        self.jpeg_prop = kwargs.get('jpeg_prop', 0.8)
+
+        # blend transform
+        self.blend_source = kwargs.get('blend_source', None)
+        self.do_blend_transform = kwargs.get('do_blend_transform', self.blend_source is not None)
+        self.blend_prop = 0.5
+        self.blend_aug = BlendAugmenter(source_dir=self.blend_source, blend_prop=self.blend_prop, do_blend_transform=self.do_blend_transform)
+
+        # additional text transform
+        self.do_add_text_transform = kwargs.get('do_add_text_transform', False)
+        self.add_text_prop = kwargs.get('add_text_prop', 0.5)
+        self.max_add_text = kwargs.get('max_add_text', 3)
+        self.add_text_aug = TextAugmenter(do_add_text=self.do_add_text_transform, max_add_text=self.max_add_text, add_text_prop=self.add_text_prop)
 
         # flip augmentation params
         self.do_flip = do_flip
@@ -144,6 +322,16 @@ class SparseFlowAugmentor:
         image_stack = np.array(self.photo_aug(Image.fromarray(image_stack)), dtype=np.uint8)
         img1, img2 = np.split(image_stack, 2, axis=0)
         return img1, img2
+
+
+    def jpeg_transform(self, img1, img2):
+        """ JPEG augmentation """
+
+        if self.do_jpeg_transform and np.random.rand() < self.jpeg_prop:
+            aug = iaa.imgcorruptlike.JpegCompression(severity=np.random.randint(1, 5))
+            img1, img2 = aug(images=[img1, img2])
+        return img1, img2
+
 
     def eraser_transform(self, img1, img2):
         ht, wd = img1.shape[:2]
@@ -237,6 +425,9 @@ class SparseFlowAugmentor:
         img1, img2 = self.color_transform(img1, img2)
         img1, img2 = self.eraser_transform(img1, img2)
         img1, img2, flow, valid = self.spatial_transform(img1, img2, flow, valid)
+        img1, img2 = self.blend_aug(img1, img2)
+        img1, img2 = self.add_text_aug(img1, img2, valid)
+        img1, img2 = self.jpeg_transform(img1, img2)
 
         img1 = np.ascontiguousarray(img1)
         img2 = np.ascontiguousarray(img2)

@@ -123,6 +123,6 @@ def save_outputs(image1, image2, flow, path, filename, clip_flow=None):
     flow_image = flow_viz.flow_to_image(flow, clip_flow=clip_flow)
     flow_image = cv2.resize(flow_image, (image1.shape[1], image1.shape[0]))
 
-    save_image(np.concatenate([flow_image, image1, image2], axis=0), os.path.join(path, 'flow_color', filename))
+    save_image(np.concatenate([flow_image, image1], axis=0), os.path.join(path, 'flow_color', filename[:-3]+"jpg"))
     save_flow_PNG(flow, os.path.join(path, 'flow', filename))
 

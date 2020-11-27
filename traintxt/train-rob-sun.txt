@@ -1,0 +1,18 @@
+--name raft-kitti-debug
+--stage kitti
+--validation kitti
+--restore_ckpt models/raft-sintel.pth
+--gpus 0 1
+--num_steps 50000
+--batch_size 6
+--lr 0.0001
+--image_size 288 960
+--wdecay 0.0
+--no_batch_norm
+--no_dropout
+--remove_vertical_flipping
+--small_flow_aug_to_second_image
+--no_add_noise
+--gamma=0.85
+--dashcam_augmenentation
+--blend_source
