@@ -270,16 +270,19 @@ class FlowAugmenter:
     def __call__(self, img1, img2, flow, valid):
         img1, img2 = self.color_transform(img1, img2)
         img1, img2 = self.eraser_transform(img1, img2)
-        img1, img2, flow = self.spatial_transform(img1, img2, flow, valid)
+        img1, img2, flow = self.spatial_transform(img1, img2, flow)
         img1, img2 = self.blend_aug(img1, img2)
+        if valid is None:
+            valid = (np.abs(flow[:,:,0]) < 1000) & (np.abs(flow[:,:,1]) < 1000)
         img1, img2, valid = self.add_text_aug(img1, img2, valid)
         img1, img2 = self.jpeg_transform(img1, img2)
 
         img1 = np.ascontiguousarray(img1)
         img2 = np.ascontiguousarray(img2)
         flow = np.ascontiguousarray(flow)
+        valid = np.ascontiguousarray(valid)
 
-        return img1, img2, flow
+        return img1, img2, flow, valid
 
 class SparseFlowAugmenter:
     def __init__(self, crop_size, min_scale=-0.2, max_scale=0.5, do_flip=False, **kwargs):
@@ -426,7 +429,7 @@ class SparseFlowAugmenter:
         img1, img2 = self.eraser_transform(img1, img2)
         img1, img2, flow, valid = self.spatial_transform(img1, img2, flow, valid)
         img1, img2 = self.blend_aug(img1, img2)
-        img1, img2 = self.add_text_aug(img1, img2, valid)
+        img1, img2, valid = self.add_text_aug(img1, img2, valid)
         img1, img2 = self.jpeg_transform(img1, img2)
 
         img1 = np.ascontiguousarray(img1)
