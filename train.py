@@ -135,6 +135,9 @@ class Logger:
 
 def train(args):
 
+    os.environ["CUDA_VISIBLE_DEVICES"] =  ",".join([str(gpu_n) for gpu_n in args.gpus])
+
+    args.gpus = range(len(args.gpus))
     model = nn.DataParallel(RAFT(args), device_ids=args.gpus)
     print("Parameter Count: %d" % count_parameters(model))
 
@@ -158,6 +161,7 @@ def train(args):
     add_noise = True
 
     should_keep_training = True
+    print('Training...')
     while should_keep_training:
 
         for i_batch, data_blob in enumerate(train_loader):
