@@ -20,6 +20,9 @@ import evaluate
 import core.datasets as datasets
 
 from torch.utils.tensorboard import SummaryWriter
+import torchvision
+
+from core.utils.flow_viz import flow_to_color
 
 try:
     from torch.cuda.amp import GradScaler
@@ -122,12 +125,43 @@ class Logger:
             self._print_training_status()
             self.running_loss = {}
 
-    def write_dict(self, results):
+    def create_writer_if_not_set(self):
         if self.writer is None:
             self.writer = SummaryWriter()
 
+    def write_dict(self, results):
+        self.create_writer_if_not_set()
+
         for key in results:
             self.writer.add_scalar(key, results[key], self.total_steps)
+
+    def write_image_dict(self, results):
+        self.create_writer_if_not_set()
+
+        for key in results:
+            self.writer.add_image(key, results[key], self.total_steps)
+
+    def write_images(self, inputs):
+        self.create_writer_if_not_set()
+
+        for key in inputs:
+            im = inputs[key]
+
+            # grid = torchvision.utils.make_grid(im)
+            # self.writer.add_image(key, grid, self.total_steps)
+            if key == 'valid':
+                data = im.type(torch.uint8)
+                data = torch.unsqueeze(data, 1) * 255
+                self.writer.add_images(key, data, dataformats='NCHW', global_step=self.total_steps)
+            elif 'flow' in key:
+                data = im.detach().cpu().numpy().transpose(0,2,3,1)
+                color_list = []
+                for i in range(data.shape[0]):
+                    color_list.append(flow_to_color(data[i, :, :, :]))
+                    color_image = np.stack(color_list, axis=0)
+                self.writer.add_images(key, color_image, dataformats='NHWC', global_step=self.total_steps)
+            else:
+                self.writer.add_images(key, im.type(torch.uint8), dataformats='NCHW', global_step=self.total_steps)
 
     def close(self):
         self.writer.close()
@@ -186,7 +220,7 @@ def train(args):
 
             logger.push(metrics)
 
-            if total_steps % VAL_FREQ == VAL_FREQ - 1:
+            if (total_steps == 7) or (total_steps % VAL_FREQ == VAL_FREQ - 1):
                 PATH = 'checkpoints/%d_%s.pth' % (total_steps+1, args.name)
                 torch.save(model.state_dict(), PATH)
 
@@ -200,7 +234,11 @@ def train(args):
                         results.update(evaluate.validate_kitti(model.module))
 
                 logger.write_dict(results)
-                
+
+                logger.write_images({'image1': image1, 'image2': image2, 'valid': valid})
+                logger.write_images({'flow_gt': flow})
+                logger.write_images({'flow_est': flow_predictions[-1]})
+
                 model.train()
                 if args.stage != 'chairs':
                     model.module.freeze_bn()
