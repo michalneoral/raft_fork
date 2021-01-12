@@ -69,12 +69,18 @@ class BlendAugmenter:
     def generate_blend_image(self, shape):
         path = np.random.choice(self.image_list)
         blend_img = np.asarray(read_gen(path)).astype(np.float32)
+        if blend_img.ndim == 2:
+            blend_img = np.stack([blend_img, blend_img, blend_img], axis=2)
+        elif blend_img.shape[2] == 1:
+            blend_img = np.concatenate([blend_img, blend_img, blend_img], axis=2)
         resized = cv2.resize(blend_img, shape, interpolation=cv2.INTER_AREA)
         return self.rgb2rgba(resized)
 
     def rgb2rgba(self, img):
         img = img.astype(np.float32)
-        return np.concatenate([img, 255 * np.ones([img.shape[0], img.shape[1], 1], dtype=np.float32)], axis=2)
+        ones = np.ones([img.shape[0], img.shape[1], 1], dtype=np.float32)
+
+        return np.concatenate([img, 255 * ones], axis=2)
 
     def list_dir_recursive(self, path):
         images_list = [os.path.join(path, x) for x in os.listdir(path) if os.path.isfile(os.path.join(path, x))]
