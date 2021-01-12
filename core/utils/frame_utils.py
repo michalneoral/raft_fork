@@ -98,6 +98,20 @@ def writeFlow(filename,uv,v=None):
     tmp.astype(np.float32).tofile(f)
     f.close()
 
+def readFlowVIPER(filename):
+    data = np.load(filename)
+    u = data['u']
+    v = data['v']
+    valid = np.logical_not(np.logical_or(np.isnan(u), np.isnan(v)).astype(np.float32))
+    flow = np.stack([u,v], axis=2)
+    flow[np.isnan(flow)] = 0
+    flow = flow.astype(np.float32)
+    flow_inf = np.isinf(flow)
+    flow[flow_inf] = 0
+    flow_inf = np.logical_or(flow_inf[:,:,0], flow_inf[:,:,1])
+    valid[flow_inf] = False
+    valid = valid.astype(np.float32)
+    return flow, valid
 
 def readFlowKITTI(filename):
     flow = cv2.imread(filename, cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
@@ -120,6 +134,15 @@ def writeFlowKITTI(filename, uv):
     cv2.imwrite(filename, uv[..., ::-1])
     
 
+def read_gen_sparse_flow(file_name, pil=False):
+    ext = splitext(file_name)[-1]
+    if ext == '.png':
+        return readFlowKITTI(file_name)
+    elif ext == '.npz':
+        return readFlowVIPER(file_name)
+    else:
+        raise NotImplementedError('Reader for this type of extension ({:s}) is not implemented'.format(ext))
+
 def read_gen(file_name, pil=False):
     ext = splitext(file_name)[-1]
     if ext == '.png' or ext == '.jpeg' or ext == '.ppm' or ext == '.jpg':
@@ -134,4 +157,5 @@ def read_gen(file_name, pil=False):
             return flow
         else:
             return flow[:, :, :-1]
-    return []
+    else:
+        raise NotImplementedError('Reader for this type of extension ({:s}) is not implemented'.format(ext))
