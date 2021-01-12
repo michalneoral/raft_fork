@@ -128,6 +128,51 @@ def validate_sintel(model, iters=32):
 
 
 @torch.no_grad()
+def validate_viper(model, iters=32):
+    """ Peform validation using the VIPER (train) split - viper_split.txt """
+    model.eval()
+    val_dataset = datasets.VIPER(split='validation')
+
+    out_list, epe_list = [], []
+    for val_id in range(len(val_dataset)):
+        image1, image2, flow_gt, valid_gt = val_dataset[val_id]
+        image1 = image1[None].cuda()
+        image2 = image2[None].cuda()
+
+        padder = InputPadder(image1.shape, mode='viper')
+        image1, image2 = padder.pad(image1, image2)
+
+        flow_low, flow_pr = model(image1, image2, iters=iters, test_mode=True)
+        flow = padder.unpad(flow_pr[0]).cpu()
+
+        epe = torch.sum((flow - flow_gt)**2, dim=0).sqrt()
+        mag = torch.sum(flow_gt**2, dim=0).sqrt()
+
+        epe = epe.detach().cpu().numpy().reshape(-1)
+        mag = mag.detach().cpu().numpy().reshape(-1)
+        val = valid_gt.detach().cpu().numpy().reshape(-1) >= 0.5
+
+        out = ((epe > 3.0) & ((epe/mag) > 0.05)).astype(np.float32)
+        epe_list.append(epe[val].mean().item())
+        out_list.append(out[val])
+
+    epe_list = np.array(epe_list)
+    out_list = np.concatenate(out_list)
+
+    epe = np.mean(epe_list)
+    f1 = 100 * np.mean(out_list)
+
+    epe_all = np.concatenate(epe_list)
+    px1 = np.mean(epe_all < 1)
+    px3 = np.mean(epe_all < 3)
+    px5 = np.mean(epe_all < 5)
+
+    print("Validation VIPER: %f, %f, %f, %f, %f" % (epe, f1, px1, px3, px5))
+    return {'viper-epe': epe, 'viper-f1': f1, 'viper-px1': px1, 'viper-px3': px3, 'viper-px5': px5}
+
+
+
+@torch.no_grad()
 def validate_kitti(model, iters=24):
     """ Peform validation using the KITTI-2015 (train) split """
     model.eval()
@@ -193,5 +238,8 @@ if __name__ == '__main__':
 
         elif args.dataset == 'kitti':
             validate_kitti(model.module)
+
+        elif args.dataset == 'viper':
+            validate_viper(model.module)
 
 
