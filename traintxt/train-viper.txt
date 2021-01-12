@@ -1,8 +1,8 @@
 --name raft-sintel-debug
 --stage viper
---validation viper
+--validation kitti
 --restore_ckpt models/raft-sintel.pth
---gpus 0 1
+--gpus 5 6
 --num_steps 50000
 --batch_size 6
 --lr 0.0001
