@@ -53,7 +53,7 @@ class FlowDataset(data.Dataset):
         index = index % len(self.image_list)
         valid = None
         if self.sparse:
-            flow, valid = frame_utils.readFlowKITTI(self.flow_list[index])
+            flow, valid = frame_utils.read_gen_sparse_flow(self.flow_list[index])
         else:
             flow = frame_utils.read_gen(self.flow_list[index])
 
@@ -176,6 +176,8 @@ class KITTI(FlowDataset):
         if split == 'training':
             self.flow_list = sorted(glob(osp.join(root, 'flow_occ/*_10.png')))
 
+        print(len(self.flow_list))
+
 
 class HD1K(FlowDataset):
     def __init__(self, aug_params=None, root='/datagrid/public_datasets/HD1K'):
@@ -198,24 +200,40 @@ class HD1K(FlowDataset):
 
 class VIPER(FlowDataset):
     def __init__(self, aug_params=None, split='training', root='/datagrid/public_datasets/PlayingForBenchmarks'):
-        super(VIPER, self).__init__(aug_params, sparse=False)
+        super(VIPER, self).__init__(aug_params, sparse=True)
 
         if split == 'testing':
             self.is_test = True
+            prefix = 'test'
+        else:
+            prefix = 'train'
 
-        seq_ix = 0
-        while 1:
-            flows = sorted(glob(os.path.join(root, 'hd1k_flow_gt', 'flow_occ/%06d_*.png' % seq_ix)))
-            images = sorted(glob(os.path.join(root, 'hd1k_input', 'image_2/%06d_*.png' % seq_ix)))
+        cur_dir = os.path.join(root, prefix, 'flow')
+        subdirs = [d for d in os.listdir(cur_dir) if os.path.isdir(os.path.join(cur_dir, d))]
+        subdirs.sort()
 
-            if len(flows) == 0:
-                break
+        split_list = np.loadtxt('viper_split.txt', dtype=np.int32)
+        sl_idx = 0
 
-            for i in range(len(flows) - 1):
-                self.flow_list += [flows[i]]
-                self.image_list += [[images[i], images[i + 1]]]
+        for sd in subdirs:
+            for i in range(0,10000,10):
 
-            seq_ix += 1
+                flow_path = os.path.join(cur_dir, sd, '{:s}_{:05d}.npz'.format(sd, i))
+                if os.path.isfile(flow_path):
+                    image1_path = os.path.join(root, prefix, 'img', sd, '{:s}_{:05d}.jpg'.format(sd, i))
+                    image2_path = os.path.join(root, prefix, 'img', sd, '{:s}_{:05d}.jpg'.format(sd, i+1))
+                    frame_id = '{:s}_{:05d}.jpg'.format(sd, i)
+
+                    if os.path.isfile(image1_path) and os.path.isfile(image2_path):
+                        xid = split_list[sl_idx]
+                        if (split == 'training' and xid == 1) or (split == 'validation' and xid == 2):
+                            self.extra_info += [[frame_id]]
+                            self.flow_list += [flow_path]
+                            self.image_list += [[image1_path, image2_path]]
+                        sl_idx += 1
+
+        print('N of samples: ', len(self.flow_list))
+
 
 
 def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
@@ -250,8 +268,10 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
         sintel_final = MpiSintel(aug_params, split='training', dstype='final')
 
         if TRAIN_DS == 'C+T+K+S+H':
-            kitti_aug_params = deepcopy(aug_params).update({'crop_size': args.image_size, 'min_scale': -0.3, 'max_scale': 0.5, 'do_flip': True})
-            hd1k_aug_params = deepcopy(aug_params).update({'crop_size': args.image_size, 'min_scale': -0.5, 'max_scale': 0.2, 'do_flip': True})
+            kitti_aug_params = deepcopy(aug_params)
+            kitti_aug_params.update({'crop_size': args.image_size, 'min_scale': -0.3, 'max_scale': 0.5, 'do_flip': True})
+            hd1k_aug_params = deepcopy(aug_params)
+            hd1k_aug_params.update({'crop_size': args.image_size, 'min_scale': -0.5, 'max_scale': 0.2, 'do_flip': True})
             kitti = KITTI(kitti_aug_params)
             hd1k = HD1K(hd1k_aug_params)
             train_dataset = 100 * sintel_clean + 100 * sintel_final + 200 * kitti + 5 * hd1k + things
@@ -260,8 +280,10 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
             train_dataset = 100 * sintel_clean + 100 * sintel_final + things
 
         elif TRAIN_DS == 'C+T+K+S+H+V':
-            kitti_aug_params = deepcopy(aug_params).update({'crop_size': args.image_size, 'min_scale': -0.3, 'max_scale': 0.5, 'do_flip': True})
-            hd1k_aug_params = deepcopy(aug_params).update({'crop_size': args.image_size, 'min_scale': -0.5, 'max_scale': 0.2, 'do_flip': True})
+            kitti_aug_params = deepcopy(aug_params)
+            kitti_aug_params.update({'crop_size': args.image_size, 'min_scale': -0.3, 'max_scale': 0.5, 'do_flip': True})
+            hd1k_aug_params = deepcopy(aug_params)
+            hd1k_aug_params.update({'crop_size': args.image_size, 'min_scale': -0.5, 'max_scale': 0.2, 'do_flip': True})
             kitti = KITTI(kitti_aug_params)
             hd1k = HD1K(hd1k_aug_params)
             train_dataset = 100 * sintel_clean + 100 * sintel_final + 200 * kitti + 5 * hd1k + things
@@ -271,7 +293,8 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
         train_dataset = KITTI(aug_params, split='training')
 
     elif args.stage == 'viper':
-        viper_aug_params = deepcopy(aug_params).update({'crop_size': args.image_size, 'min_scale': -0.5, 'max_scale': 0.2, 'do_flip': True})
+        viper_aug_params = deepcopy(aug_params)
+        viper_aug_params.update({'crop_size': args.image_size, 'min_scale': -2, 'max_scale': -0.5, 'do_flip': True})
         train_dataset = VIPER(viper_aug_params, split='training')
 
     elif args.stage == 'all':
@@ -279,19 +302,22 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
         things = FlyingThings3D(aug_params, dstype='frames_cleanpass')
         sintel_clean = MpiSintel(aug_params, split='training', dstype='clean')
         sintel_final = MpiSintel(aug_params, split='training', dstype='final')
-        kitti_aug_params = deepcopy(aug_params).update({'crop_size': args.image_size, 'min_scale': -0.3, 'max_scale': 0.5, 'do_flip': True})
-        hd1k_aug_params = deepcopy(aug_params).update({'crop_size': args.image_size, 'min_scale': -0.5, 'max_scale': 0.2, 'do_flip': True})
-        viper_aug_params = deepcopy(aug_params).update({'crop_size': args.image_size, 'min_scale': -0.5, 'max_scale': 0.2, 'do_flip': True})
-        kitti = KITTI(kitti_aug_params, )
+        kitti_aug_params = deepcopy(aug_params)
+        kitti_aug_params.update({'crop_size': args.image_size, 'min_scale': -0.3, 'max_scale': 0.5, 'do_flip': True})
+        hd1k_aug_params = deepcopy(aug_params)
+        hd1k_aug_params.update({'crop_size': args.image_size, 'min_scale': -2, 'max_scale': -0.5, 'do_flip': True})
+        viper_aug_params = deepcopy(aug_params)
+        viper_aug_params.update({'crop_size': args.image_size, 'min_scale': -2, 'max_scale': -0.5, 'do_flip': True})
+        kitti = KITTI(kitti_aug_params, split='training')
         hd1k = HD1K(hd1k_aug_params)
-        viper = VIPER(viper_aug_params)
+        viper = VIPER(viper_aug_params, split='training')
         # sintel 0.4
         # KITTI 0.2
         # VIPER 0.2 down 2x
         # HD1K 0.08 down 2x
         # Things 0.12
         # kitti, viper, hd1k - reduced probability of spatial aut to 0.5
-        train_dataset = (200 * sintel_clean) + (200 * sintel_final) + (200 * kitti) + (80 * hd1k) + (120 * things) + (200 * viper)
+        train_dataset = (200 * sintel_clean) + (200 * sintel_final) + (200 * kitti) + (80 * hd1k) + (200 * viper) + (120 * things)
 
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size,
                                    pin_memory=False, shuffle=True, num_workers=4, drop_last=True)
