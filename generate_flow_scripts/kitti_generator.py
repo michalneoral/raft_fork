@@ -35,9 +35,10 @@ def gen(args):
     for dataset_name in ['training', 'testing']:
 
         data_root = '/datagrid/public_datasets/KITTI/multiview/{:s}/image_2'.format(dataset_name)
-        save_root = '/datagrid/personal/neoral/datasets/optical_flow_neomoseg/raft_new_export/kitti/{:s}'.format(dataset_name)
+        save_root = '/datagrid/personal/neoral/datasets/optical_flow_neomoseg/raft_new_export/kitti_things_model/{:s}'.format(dataset_name)
+        # save_root = '/datagrid/tlab/personal/neoramic/datasets/optical_flow_neomoseg/raft_new_export/kitti_aug_model/{:s}'.format(dataset_name)
 
-        ITERS = 24
+        ITERS = args.iters
 
         model = torch.nn.DataParallel(RAFT(args))
         model.load_state_dict(torch.load(args.model))
@@ -48,11 +49,11 @@ def gen(args):
 
         model_e = model
     
-        for t_scale_i in range(5):
+        for t_scale_i in range(args.time_scale):
             t_scale = t_scale_i + 1
             pbar = tqdm(range(200))
             for sequence in pbar:
-                for image_n in range(21):
+                for image_n in range(args.min_frame, args.max_frame + 1):
                     path_im1 = os.path.join(data_root, '{:06d}_{:02d}.png'.format(sequence, image_n))
                     path_im2 = os.path.join(data_root, '{:06d}_{:02d}.png'.format(sequence, image_n + t_scale))
                     
@@ -78,19 +79,26 @@ def gen(args):
                         #flow_predictions = model(image1, image2, iters=16, test_mode=True)
                         flow_gen.save_outputs(image1_orig, image2_orig, flow, os.path.join(save_root, 'time_scale_{:d}'.format(t_scale), 'forward'), '{:06d}_{:02d}.png'.format(sequence, image_n))
 
-                        #flow_predictions = model(image2, image1, iters=16, test_mode=True)
-                        _, flow_pr = model_e(image2, image1, iters=ITERS, test_mode=True)
-                        flow = padder.unpad(flow_pr[0]).permute(1, 2, 0).cpu().numpy()
-                        flow_gen.save_outputs(image2_orig, image1_orig, flow, os.path.join(save_root, 'time_scale_{:d}'.format(t_scale), 'backward'), '{:06d}_{:02d}.png'.format(sequence, image_n + t_scale))
+                        if args.backward:
+                            #flow_predictions = model(image2, image1, iters=16, test_mode=True)
+                            _, flow_pr = model_e(image2, image1, iters=ITERS, test_mode=True)
+                            flow = padder.unpad(flow_pr[0]).permute(1, 2, 0).cpu().numpy()
+                            flow_gen.save_outputs(image2_orig, image1_orig, flow, os.path.join(save_root, 'time_scale_{:d}'.format(t_scale), 'backward'), '{:06d}_{:02d}.png'.format(sequence, image_n + t_scale))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint")
     parser.add_argument('--small', action='store_true', help='use small model')
-    parser.add_argument('--iters', type=int, default=12)
+    parser.add_argument('--iters', type=int, default=24)
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
+    parser.add_argument('--time_scale', type=int, default=5)
+    parser.add_argument('--min_frame', type=int, default=0)
+    parser.add_argument('--max_frame', type=int, default=20)
+    parser.add_argument('--backward', action='store_true', help='compute backward flow')
+
+
 
     args = parser.parse_args()
     gen(args)

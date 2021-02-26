@@ -42,7 +42,7 @@ def gen(args):
     elif 'things' in args.model:
         short_model_name = 'things'
     else:
-        raise NotImplementedError()
+        short_model_name = args.model[:-4]
 
     if args.fullres:
         data_root = '/datagrid/tlab/data/MoSegUnexpected/images'
@@ -65,7 +65,7 @@ def gen(args):
 
     model_e = model
 
-    for t_scale_i in range(5):
+    for t_scale_i in range(args.time_scale):
         t_scale = t_scale_i + 1
 
         subdirs = [d for d in os.listdir(data_root) if os.path.isdir(os.path.join(data_root,d))]
@@ -81,7 +81,7 @@ def gen(args):
 
 
 
-            for image_n in range(n_files - t_scale):
+            for image_n in range(args.min_frame, min(args.max_frame,n_files - t_scale)):
 
                 path_im1 = os.path.join(cur_dir, files_list[image_n])
                 try:
@@ -123,10 +123,11 @@ def gen(args):
                     # flow_predictions = model(image1, image2, iters=16, test_mode=True)
                     flow_gen.save_outputs(image1_orig, image2_orig, flow, dir_flow_fw, filename_flow_fw, clip_flow=MAX_FLOW_VIS)
 
-                    # flow_predictions = model(image2, image1, iters=16, test_mode=True)
-                    _, flow_pr = model_e(image2, image1, iters=ITERS, test_mode=True)
-                    flow = padder.unpad(flow_pr[0]).permute(1, 2, 0).cpu().numpy()
-                    flow_gen.save_outputs(image2_orig, image1_orig, flow, dir_flow_bw, filename_flow_bw, clip_flow=MAX_FLOW_VIS)
+                    if args.backward:
+                        # flow_predictions = model(image2, image1, iters=16, test_mode=True)
+                        _, flow_pr = model_e(image2, image1, iters=ITERS, test_mode=True)
+                        flow = padder.unpad(flow_pr[0]).permute(1, 2, 0).cpu().numpy()
+                        flow_gen.save_outputs(image2_orig, image1_orig, flow, dir_flow_bw, filename_flow_bw, clip_flow=MAX_FLOW_VIS)
 
 
 if __name__ == '__main__':
@@ -138,6 +139,11 @@ if __name__ == '__main__':
     parser.add_argument('--gpu', help="number of CUDA_VISIBLE_DEVICES", default='0')
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
+
+    parser.add_argument('--time_scale', type=int, default=5)
+    parser.add_argument('--min_frame', type=int, default=0)
+    parser.add_argument('--max_frame', type=int, default=1000)
+    parser.add_argument('--backward', action='store_true', help='compute backward flow')
 
     args = parser.parse_args()
 
