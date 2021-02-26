@@ -46,7 +46,7 @@ except:
 # exclude extremly large displacements
 MAX_FLOW = 400
 SUM_FREQ = 100
-VAL_FREQ = 100 # 5000
+VAL_FREQ = 5000 # 5000
 
 
 def sequence_loss(flow_preds, flow_gt, valid, gamma=0.8, max_flow=MAX_FLOW):
@@ -195,15 +195,13 @@ def train(args):
     scaler = GradScaler(enabled=args.mixed_precision)
     logger = Logger(model, scheduler)
 
-    VAL_FREQ = 5000
-    add_noise = True
 
     should_keep_training = True
     print('Training...', train_timer.iter(), train_timer())
     while should_keep_training:
 
         for i_batch, data_blob in enumerate(train_loader):
-            print(total_steps, train_timer.iter(), train_timer())
+            # print(total_steps, train_timer.iter(), train_timer())
 
             optimizer.zero_grad()
             image1, image2, flow, valid = [x.cuda() for x in data_blob]
@@ -231,21 +229,21 @@ def train(args):
                 torch.save(model.state_dict(), PATH)
 
                 results = {}
-                print('before val: ', train_timer.iter(), train_timer())
+                # print('before val: ', train_timer.iter(), train_timer())
                 for val_dataset in args.validation:
                     if val_dataset == 'chairs':
                         results.update(evaluate.validate_chairs(model.module))
-                        print('val: ', train_timer.iter(), train_timer())
+                        # print('val: ', train_timer.iter(), train_timer())
                     elif val_dataset == 'sintel':
                         results.update(evaluate.validate_sintel(model.module))
-                        print('val: ', train_timer.iter(), train_timer())
+                        # print('val: ', train_timer.iter(), train_timer())
                     elif val_dataset == 'kitti':
                         results.update(evaluate.validate_kitti(model.module))
-                        print('val: ', train_timer.iter(), train_timer())
+                        # print('val: ', train_timer.iter(), train_timer())
                     elif val_dataset == 'viper':
                         results.update(evaluate.validate_viper(model.module))
-                        print('val: ', train_timer.iter(), train_timer())
-                print('after val: ', train_timer.iter(), train_timer())
+                        # print('val: ', train_timer.iter(), train_timer())
+                print('after val: ', total_steps, train_timer.iter(), train_timer())
 
                 logger.write_dict(results)
 
