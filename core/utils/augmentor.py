@@ -337,7 +337,7 @@ class SparseFlowAugmenter:
         """ JPEG augmentation """
 
         if self.do_jpeg_transform and np.random.rand() < self.jpeg_prop:
-            aug = iaa.imgcorruptlike.JpegCompression(severity=np.random.randint(1, 5))
+            aug = iaa.imgcorruptlike.JpegCompression(severity=np.random.randint(1, 4))
             img1, img2 = aug(images=[img1, img2])
         return img1, img2
 
