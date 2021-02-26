@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image
-from RAFT.core.utils import read_gen
+from RAFT.core.utils.frame_utils import read_gen
 import os
 
 import cv2

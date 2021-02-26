@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 print(find_packages())
 
 setup(
-    name='raft', 
+    name='RAFT',
     version='0.1',
     description='',
     packages=find_packages(),
