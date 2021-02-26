@@ -3,16 +3,14 @@
 import numpy as np
 import torch
 import torch.utils.data as data
-import torch.nn.functional as F
 
 import os
-import math
 import random
 from glob import glob
 import os.path as osp
 
-from core.utils import frame_utils
-from core.utils.augmentor import FlowAugmenter, SparseFlowAugmenter
+from RAFT.core.utils import frame_utils
+from RAFT.core.utils import FlowAugmenter, SparseFlowAugmenter
 from copy import deepcopy
 
 class FlowDataset(data.Dataset):

@@ -1,7 +1,6 @@
 import sys
 sys.path.append('core')
 
-import argparse
 import os
 import cv2
 import numpy as np
@@ -11,10 +10,7 @@ from PIL import Image
 import imageio
 import png
 
-import core.datasets as datasets
-from core.utils import flow_viz
-from core.raft import RAFT
-
+from RAFT.core.utils import flow_viz
 
 DEVICE = 'cuda'
 

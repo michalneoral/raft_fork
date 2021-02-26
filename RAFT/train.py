@@ -4,27 +4,21 @@ sys.path.append('core')
 
 import argparse
 import os
-import cv2
-import time
 import numpy as np
-import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 
-from torch.utils.data import DataLoader
-from core.raft import RAFT
-import evaluate
-import core.datasets as datasets
+from RAFT.core import RAFT
+from RAFT import evaluate
+import RAFT.core.datasets as datasets
 
 from torch.utils.tensorboard import SummaryWriter
-import torchvision
 
-from core.utils.timer import Timer
+from RAFT.core.utils import Timer
 
-from core.utils.flow_viz import flow_to_color
+from RAFT.core.utils import flow_to_color
 
 try:
     from torch.cuda.amp import GradScaler

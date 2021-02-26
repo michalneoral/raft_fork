@@ -4,21 +4,11 @@ sys.path.append('core')
 
 import argparse
 import os
-import cv2
-import numpy as np
 import torch
-import torch.nn.functional as F
-from PIL import Image
 
-import core.datasets as datasets
-from core.utils import flow_viz
-from core.raft import RAFT
-import core.utils.flow_gen as flow_gen
-from core.utils.flow_viz import flow_to_image
+from RAFT.core import RAFT
+import RAFT.core.utils.flow_gen as flow_gen
 from tqdm import tqdm
-from tqdm.auto import trange
-from time import sleep
-
 
 DEVICE = 'cuda'
 

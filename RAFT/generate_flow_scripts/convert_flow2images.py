@@ -3,25 +3,13 @@ import sys
 sys.path.append("/datagrid/personal/neoral/repos/raft_new_debug")
 sys.path.append('core')
 
-import argparse
 import os
-import cv2
 import numpy as np
-import torch
-import torch.nn.functional as F
 from PIL import Image
 
-import core.datasets as datasets
-from core.utils import flow_viz
-from core.raft import RAFT
-import core.utils.flow_gen as flow_gen
-from core.utils.flow_viz import flow_to_image
+from RAFT.core.utils import flow_viz
+import RAFT.core.utils.flow_gen as flow_gen
 from tqdm import tqdm
-from tqdm.auto import trange
-from time import sleep
-
-from core.utils.utils import InputPadder
-from core.utils import frame_utils
 
 DEVICE = 'cuda'
 MAX_FLOW_VIS = 20
