@@ -82,11 +82,12 @@ class RAFT(nn.Module):
         return up_flow.reshape(N, 2, 8*H, 8*W)
 
 
-    def forward(self, image1, image2, iters=12, flow_init=None, upsample=True, test_mode=False):
+    def forward(self, image1, image2, iters=12, flow_init=None, upsample=True, test_mode=False, normalise_input=True, return_features=False, return_coords=True):
         """ Estimate optical flow between pair of frames """
 
-        image1 = 2 * (image1 / 255.0) - 1.0
-        image2 = 2 * (image2 / 255.0) - 1.0
+        if normalise_input:
+            image1 = 2 * (image1 / 255.0) - 1.0
+            image2 = 2 * (image2 / 255.0) - 1.0
 
         image1 = image1.contiguous()
         image2 = image2.contiguous()
@@ -137,7 +138,18 @@ class RAFT(nn.Module):
             
             flow_predictions.append(flow_up)
 
-        if test_mode:
+        if return_features:
+            context_features = torch.cat([cnet, fmap1], dim=1)
+
+        if test_mode and return_coords:
+            if return_features:
+                return coords1 - coords0, flow_up, context_features
             return coords1 - coords0, flow_up
-            
+        elif test_mode:
+            if return_features:
+                return flow_up, context_features
+            return flow_up
+
+        if return_features:
+            return flow_predictions, context_features
         return flow_predictions

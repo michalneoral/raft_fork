@@ -165,7 +165,7 @@ class BasicEncoder(nn.Module):
         return nn.Sequential(*layers)
 
 
-    def forward(self, x):
+    def forward(self, x, return_features=False):
 
         # if input is list, combine batch dimension
         is_list = isinstance(x, tuple) or isinstance(x, list)
@@ -179,6 +179,7 @@ class BasicEncoder(nn.Module):
 
         x = self.layer1(x)
         x = self.layer2(x)
+        features = x
         x = self.layer3(x)
 
         x = self.conv2(x)
@@ -189,6 +190,8 @@ class BasicEncoder(nn.Module):
         if is_list:
             x = torch.split(x, [batch_dim, batch_dim], dim=0)
 
+        if return_features:
+            return x, features
         return x
 
 

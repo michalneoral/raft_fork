@@ -10,7 +10,7 @@ from glob import glob
 import os.path as osp
 
 from RAFT.core.utils import frame_utils
-from RAFT.core.utils import FlowAugmenter, SparseFlowAugmenter
+from RAFT.core.utils.augmentor import FlowAugmenter, SparseFlowAugmenter
 from copy import deepcopy
 
 class FlowDataset(data.Dataset):

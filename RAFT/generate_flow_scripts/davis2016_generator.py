@@ -9,11 +9,11 @@ import numpy as np
 import torch
 from PIL import Image
 
-from RAFT.core import RAFT
+from RAFT.core.raft import RAFT
 import RAFT.core.utils.flow_gen as flow_gen
 from tqdm import tqdm
 
-from RAFT.core.utils import InputPadder
+from RAFT.core.utils.utils import InputPadder
 
 DEVICE = 'cuda'
 MAX_FLOW_VIS = 20

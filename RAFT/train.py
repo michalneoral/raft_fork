@@ -10,15 +10,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from RAFT.core import RAFT
+
+from RAFT.core.raft import RAFT
 from RAFT import evaluate
 import RAFT.core.datasets as datasets
 
 from torch.utils.tensorboard import SummaryWriter
 
-from RAFT.core.utils import Timer
+from RAFT.core.utils.timer import Timer
 
-from RAFT.core.utils import flow_to_color
+from RAFT.core.utils.flow_viz import flow_to_color
 
 try:
     from torch.cuda.amp import GradScaler

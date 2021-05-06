@@ -24,10 +24,19 @@ def load_image(imfile):
 @torch.no_grad()
 def gen(args):
 
-    for dataset_name in ['training', 'testing']:
+    for dataset_name in ['testing', 'training']:
+
+        if 'kitti' in args.model:
+            short_model_name = 'kitti'
+        elif 'sintel' in args.model:
+            short_model_name = 'sintel'
+        elif 'things' in args.model:
+            short_model_name = 'things'
+        else:
+            short_model_name = args.model[:-4]
 
         data_root = '/datagrid/public_datasets/KITTI/multiview/{:s}/image_2'.format(dataset_name)
-        save_root = '/datagrid/personal/neoral/datasets/optical_flow_neomoseg/raft_new_export/kitti_things_model/{:s}'.format(dataset_name)
+        save_root = '/datagrid/personal/neoral/datasets/optical_flow_neomoseg/raft_new_export/kitti_{:s}_model/{:s}'.format(short_model_name, dataset_name)
         # save_root = '/datagrid/tlab/personal/neoramic/datasets/optical_flow_neomoseg/raft_new_export/kitti_aug_model/{:s}'.format(dataset_name)
 
         ITERS = args.iters
@@ -44,6 +53,7 @@ def gen(args):
         for t_scale_i in range(args.time_scale):
             t_scale = t_scale_i + 1
             pbar = tqdm(range(200))
+            # pbar = tqdm([11,122,15,177])
             for sequence in pbar:
                 for image_n in range(args.min_frame, args.max_frame + 1):
                     path_im1 = os.path.join(data_root, '{:06d}_{:02d}.png'.format(sequence, image_n))
